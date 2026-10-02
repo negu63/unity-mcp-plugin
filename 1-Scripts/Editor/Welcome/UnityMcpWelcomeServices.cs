@@ -856,10 +856,16 @@ namespace UnityMCP.Editor.Welcome
             // in the background (by an agent, a script) waits until the user comes back to it.
             if (!InternalEditorUtility.isApplicationActive)
             {
+#if UNITY_2022_2_OR_NEWER
                 EditorApplication.focusChanged -= OnFocusChanged;
                 EditorApplication.focusChanged += OnFocusChanged;
+#else
+                EditorApplication.update -= WaitForFocus;
+                EditorApplication.update += WaitForFocus;
+#endif
                 return;
             }
+            StopWaitingForFocus();
             if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode)
             {
                 if (s_ticks++ < MAX_DEFERRAL_TICKS) EditorApplication.delayCall += TryOpen;
@@ -888,10 +894,27 @@ namespace UnityMCP.Editor.Welcome
         private static void OnFocusChanged(bool focused)
         {
             if (!focused) return;
-            EditorApplication.focusChanged -= OnFocusChanged;
+            StopWaitingForFocus();
             s_ticks = 0;
+            EditorApplication.delayCall -= TryOpen;
             EditorApplication.delayCall += TryOpen;
         }
+
+        private static void StopWaitingForFocus()
+        {
+#if UNITY_2022_2_OR_NEWER
+            EditorApplication.focusChanged -= OnFocusChanged;
+#else
+            EditorApplication.update -= WaitForFocus;
+#endif
+        }
+
+#if !UNITY_2022_2_OR_NEWER
+        private static void WaitForFocus()
+        {
+            OnFocusChanged(InternalEditorUtility.isApplicationActive);
+        }
+#endif
 
         private static void OnPackageImported(string packageName)
         {

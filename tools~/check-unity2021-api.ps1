@@ -22,32 +22,47 @@ foreach ($name in @('UnityEngine.UI.dll', 'UnityEngine.TestRunner.dll', 'UnityEd
     $references += $assembly
     $packages += @{ file = $assembly.FullName; sha256 = (Get-FileHash -LiteralPath $assembly.FullName -Algorithm SHA256).Hash }
 }
-$sources = @(Get-ChildItem -LiteralPath (Join-Path $pluginRoot 'Editor') -Filter '*.cs' -File -Recurse)
-$assemblyOutput = Join-Path $outputRoot 'AnkleBreaker.UnityMCP.Editor.dll'
-if (Test-Path -LiteralPath $assemblyOutput) { Remove-Item -LiteralPath $assemblyOutput }
-$response = @('-target:library', '-nologo', '-nostdlib+', '-langversion:9', '/preferreduilang:en-US', ('-out:"{0}"' -f $assemblyOutput))
-$response += '-define:UNITY_EDITOR;UNITY_EDITOR_WIN;UNITY_EDITOR_64;UNITY_STANDALONE_WIN;NET_STANDARD_2_1;NETSTANDARD2_1;UNITY_2021_3;UNITY_2021_3_18;UNITY_2021_3_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_5_3_OR_NEWER'
-$response += $references | ForEach-Object { '-r:"{0}"' -f $_.FullName }
-$response += $sources | ForEach-Object { '"{0}"' -f $_.FullName }
-$responsePath = Join-Path $outputRoot 'compile.rsp'
-[System.IO.File]::WriteAllLines($responsePath, $response, [System.Text.UTF8Encoding]::new($false))
-$logPath = Join-Path $outputRoot 'compiler.log'
-& (Join-Path $editorData 'NetCoreRuntime/dotnet.exe') (Join-Path $editorData 'DotNetSdkRoslyn/csc.dll') "@$responsePath" > $logPath
-$compilerExit = $LASTEXITCODE
+$assemblies = @(
+    @{ name = 'AnkleBreaker.UnityMCP.Editor'; sourceRoot = 'Editor' },
+    @{ name = 'UnityMCP.Editor.Welcome'; sourceRoot = '1-Scripts/Editor/Welcome' }
+)
+$assemblyReports = @()
+foreach ($target in $assemblies) {
+    $sources = @(Get-ChildItem -LiteralPath (Join-Path $pluginRoot $target.sourceRoot) -Filter '*.cs' -File -Recurse)
+    $assemblyOutput = Join-Path $outputRoot ($target.name + '.dll')
+    if (Test-Path -LiteralPath $assemblyOutput) { Remove-Item -LiteralPath $assemblyOutput }
+    $response = @('-target:library', '-nologo', '-nostdlib+', '-langversion:9', '/preferreduilang:en-US', ('-out:"{0}"' -f $assemblyOutput))
+    $response += '-define:UNITY_EDITOR;UNITY_EDITOR_WIN;UNITY_EDITOR_64;UNITY_STANDALONE_WIN;NET_STANDARD_2_1;NETSTANDARD2_1;UNITY_2021_3;UNITY_2021_3_18;UNITY_2021_3_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_5_3_OR_NEWER'
+    $response += $references | ForEach-Object { '-r:"{0}"' -f $_.FullName }
+    $response += $sources | ForEach-Object { '"{0}"' -f $_.FullName }
+    $responsePath = Join-Path $outputRoot ($target.name + '.rsp')
+    [System.IO.File]::WriteAllLines($responsePath, $response, [System.Text.UTF8Encoding]::new($false))
+    $logPath = Join-Path $outputRoot ($target.name + '.compiler.log')
+    & (Join-Path $editorData 'NetCoreRuntime/dotnet.exe') (Join-Path $editorData 'DotNetSdkRoslyn/csc.dll') "@$responsePath" > $logPath
+    $compilerExit = $LASTEXITCODE
+    $assemblyReports += @{
+        name = $target.name
+        sourceCount = $sources.Count
+        exitCode = $compilerExit
+        passed = $compilerExit -eq 0 -and (Test-Path -LiteralPath $assemblyOutput)
+        log = $logPath
+    }
+}
+$failedAssemblies = @($assemblyReports | Where-Object { !$_.passed })
 $report = @{
     unityVersion = $version
     check = 'C# compilation against installed Unity assemblies; no editor execution or package import'
-    sourceCount = $sources.Count
+    sourceCount = ($assemblyReports | Measure-Object -Property sourceCount -Sum).Sum
     referenceCount = $references.Count
     packageAssemblies = $packages
-    exitCode = $compilerExit
-    passed = $compilerExit -eq 0 -and (Test-Path -LiteralPath $assemblyOutput)
+    exitCode = if ($failedAssemblies.Count -gt 0) { $failedAssemblies[0].exitCode } else { 0 }
+    passed = $failedAssemblies.Count -eq 0
     excludedIntegrations = @('UMA', 'ProBuilder')
-    log = $logPath
+    assemblies = $assemblyReports
 }
 $report | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $outputRoot 'report.json') -Encoding UTF8
 if (!$report.passed) {
-    Get-Content -LiteralPath $logPath
-    throw "Unity API compilation failed (exit $compilerExit)"
+    foreach ($failed in $failedAssemblies) { Get-Content -LiteralPath $failed.log }
+    throw 'Unity API compilation failed; see report.json for assembly results'
 }
 $report | ConvertTo-Json -Depth 5

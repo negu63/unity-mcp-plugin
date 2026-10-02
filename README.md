@@ -173,7 +173,7 @@ Compiler metadata reuse, visible-row history drawing and paginated result constr
 
 ## Compatibility and validation
 
-The declared minimum remains **Unity 2021.3.18f1**. All 78 editor sources included in the minimum-version API compiler check pass. Actual older-editor execution is deferred; current live validation uses **Unity 6000.6.2f1 on Windows**.
+The declared minimum remains **Unity 2021.3.18f1**. All 86 editor sources included in the minimum-version API compiler check pass (78 core bridge sources and 8 Welcome sources, compiled as separate assemblies). Actual older-editor execution is deferred; current live validation uses **Unity 6000.6.2f1 on Windows**.
 
 The companion server has **263 passing tests on eight CI configurations** (Node 18/20/22/24, Windows/Linux); this plugin passes its **338-route registry check**. Native tests and live workflows provide separate Unity evidence. The [delivery summary](https://github.com/AnkleBreaker-Studio/unity-mcp-server/blob/main/docs/modernization-audit.md) records the source checkpoints and limits; the broad compatibility matrix and later focused checks were not all run at one final commit.
 

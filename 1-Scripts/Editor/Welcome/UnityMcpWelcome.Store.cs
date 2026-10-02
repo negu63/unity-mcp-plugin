@@ -751,9 +751,9 @@ namespace UnityMCP.Editor.Welcome
             {
                 evt.StopPropagation();
                 if (Mathf.Abs(evt.delta.x) > Mathf.Abs(evt.delta.y))
-                    scroll.scrollOffset += new Vector2(evt.delta.x * scroll.mouseWheelScrollSize, 0);
+                    scroll.scrollOffset += new Vector2(evt.delta.x * GetMouseWheelScrollSize(scroll), 0);
                 else if (page != null)
-                    page.scrollOffset += new Vector2(0, evt.delta.y * page.mouseWheelScrollSize);
+                    page.scrollOffset += new Vector2(0, evt.delta.y * GetMouseWheelScrollSize(page));
             }, TrickleDown.TrickleDown);
             float saved = _gameCarouselOffsets.TryGetValue(game.id, out float offset) ? offset : 0;
             scroll.horizontalScroller.valueChanged += _ => update();
@@ -761,6 +761,16 @@ namespace UnityMCP.Editor.Welcome
             scroll.schedule.Execute(() => { scroll.scrollOffset = new Vector2(saved, 0); update(); }).ExecuteLater(30);
             section.Add(scroll);
             host.Add(section);
+        }
+
+        private static float GetMouseWheelScrollSize(ScrollView scroll)
+        {
+#if UNITY_2022_2_OR_NEWER
+            return scroll.mouseWheelScrollSize;
+#else
+            // Older ScrollViews use the editor's default line height for wheel scrolling.
+            return UnityEditor.EditorGUIUtility.singleLineHeight;
+#endif
         }
 
         /// <summary>The latest post as a banner over its own cover, veiled on the text side; a
